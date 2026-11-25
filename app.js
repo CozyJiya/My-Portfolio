@@ -89,9 +89,10 @@
   /* ---------- stage ---------- */
   const stage = $("#stage"), desk = $("#desk");
   let scale = 1, justDragged = false;
+  const BAR = 42; // the hint strip above the desk; keep in step with --bar in styles.css
   function fit() {
     const vw = root.clientWidth, vh = innerHeight;
-    scale = portrait.matches ? Math.min(vw / 390, 1.6) : Math.min(vw / 1440, Math.max(vh, 560) / 900);
+    scale = portrait.matches ? Math.min(vw / 390, 1.6) : Math.min(vw / 1440, (Math.max(vh, 560) - BAR) / 900);
     root.style.setProperty("--s", scale.toFixed(4));
     placeLight();
     sizeBook();
@@ -358,7 +359,7 @@
     cutting = false;
   });
 
-  // Headphones play a soft, made-up music box tune.
+  // Headphones play S.song.day or S.song.night, whichever light is on; if the file cannot load they play a made-up music box tune.
   const ear = $(".obj.ear"); let ac = null, tuneT = 0, beat = 0;
   function pling(freq, gain, len) {
     const o = ac.createOscillator(), g = ac.createGain(), n = ac.currentTime;
@@ -372,20 +373,52 @@
     const s = (Math.random() - 0.5) * 60;
     el.animate([{ transform: "translateY(0) scale(.5)", opacity: 0 }, { opacity: 1, offset: 0.2 }, { transform: `translate(${s}px,-90px) rotate(${s / 2}deg) scale(1.1)`, opacity: 0 }], { duration: 1500, easing: "ease-out" }).onfinish = () => el.remove();
   }
-  function tune(on) {
-    clearInterval(tuneT); ear.classList.toggle("on", on); $("#ear").setAttribute("aria-pressed", on);
-    relabel("ear", on ? "pause" : "press play", on ? "Pause the tune" : "Play a little tune");
-    if (!on) return;
-    try { ac = ac || new AudioContext(); ac.resume(); } catch {}
+  let player = null, au = null, heard = false;
+  const pickSong = () => (S.song && S.song[root.dataset.theme === "night" ? "night" : "day"]) || null;
+  function fade(el, to, ms, done) {
+    const from = el.volume, t0 = performance.now();
+    clearInterval(el.fadeT);
+    el.fadeT = setInterval(() => { const t = clamp((performance.now() - t0) / ms, 0, 1); el.volume = from + (to - from) * t; if (t === 1) { clearInterval(el.fadeT); done && done(); } }, 40);
+  }
+  function stopAudio() { if (!au) return; const old = au; au = null; old.onerror = old.onplaying = null; fade(old, 0, 420, () => { old.pause(); old.removeAttribute("src"); old.load(); }); }
+  function closePlayer() { stopAudio(); if (player) { player.remove(); player = null; } heard = false; }
+  function playSong(song) {
+    stopAudio(); heard = false;
+    if (!player) { player = document.createElement("div"); player.className = "player"; player.setAttribute("role", "region"); player.setAttribute("aria-label", "Music player"); document.body.append(player); }
+    const link = (h, t) => `<a href="${esc(h)}" target="_blank" rel="noopener">${esc(t)}</a>`;
+    player.innerHTML = `<div><span><b>${esc(song.title)}</b><small>${link(song.from, song.by)}, ${link(song.licenseUrl, song.license)}</small></span><button class="x" aria-label="Stop the music">×</button></div><p role="status">Loading the music…</p>`;
+    $(".x", player).onclick = () => tune(false);
+    const me = (au = new Audio());
+    me.loop = true; me.volume = 0; me.src = song.file;
+    let spare = song.backup;
+    const fail = () => {
+      if (au !== me) return;
+      if (!spare) return tune(true, true);
+      me.src = spare; spare = ""; start();
+    };
+    const start = () => me.play().catch((e) => { if (e.name === "NotAllowedError") tune(false); });
+    me.onerror = fail;
+    me.onplaying = () => { if (au !== me) return; heard = true; ear.classList.add("on"); if (player) $("p", player).hidden = true; fade(me, 0.55, 900); };
+    start();
+  }
+  // Turning the lamp on or off changes the song too.
+  const swapSong = () => { const song = pickSong(); if (au && song) playSong(song); };
+  function tune(on, box) {
+    const song = on && !box && pickSong();
+    clearInterval(tuneT); ear.classList.toggle("on", !!on && !song); ear.classList.toggle("open", !!on); $("#ear").setAttribute("aria-pressed", !!on);
+    relabel("ear", on ? "stop" : "press play", on ? "Stop the music" : "Play some music");
+    if (!on) return closePlayer();
+    if (song) playSong(song); else { closePlayer(); try { ac = ac || new AudioContext(); ac.resume(); } catch {} }
     const PENTA = [0, 2, 4, 7, 9, 12, 14, 16], hz = (n) => 392 * Math.pow(2, n / 12), BASS = [-24, -15, -19, -17];
     tuneT = setInterval(() => {
-      if (view !== "desk" || document.hidden) return tune(false);
-      if (ac) { if (beat % 8 === 0) pling(hz(BASS[(beat / 8) % 4]), 0.05, 2.6); if (Math.random() > 0.34) pling(hz(PENTA[Math.floor(Math.random() * 8)]), 0.04, 1.5); }
-      if (beat % 3 === 0) floatNote();
+      const away = view !== "desk" || document.hidden;
+      if (!song && away) return tune(false);
+      if (!song && ac) { if (beat % 8 === 0) pling(hz(BASS[(beat / 8) % 4]), 0.05, 2.6); if (Math.random() > 0.34) pling(hz(PENTA[Math.floor(Math.random() * 8)]), 0.04, 1.5); }
+      if (beat % 3 === 0 && !away && !overlay && (!song || heard)) floatNote();
       beat++;
     }, 300);
   }
-  $("#ear").addEventListener("click", () => tune(!ear.classList.contains("on")));
+  $("#ear").addEventListener("click", () => tune(!ear.classList.contains("open")));
 
   /* ---------- little desk behaviours ---------- */
   const toast = $("#toast"); let toastT;
@@ -410,10 +443,9 @@
   $$(".task").forEach((b) => b.addEventListener("click", () => {
     const on = b.getAttribute("aria-checked") !== "true";
     b.setAttribute("aria-checked", on);
-    if (on && b.hasAttribute("data-px")) {
-      const q = b.getBoundingClientRect(); sparks(q.left + 10, q.top + 10); say("moved it 1px left");
-      const w = $("span", b); w.style.translate = "-1px";
-      setTimeout(() => { b.setAttribute("aria-checked", "false"); w.style.translate = ""; say("moved it back"); }, 2600);
+    if (on && b.hasAttribute("data-plan")) {
+      const q = b.getBoundingClientRect(); sparks(q.left + 10, q.top + 10); say("checking…");
+      setTimeout(() => { b.setAttribute("aria-checked", "false"); say("it was on sale"); }, 2600);
     }
   }));
   const fan = $("#fan");
@@ -442,7 +474,7 @@
   function themeColor() { $('meta[name="theme-color"]').content = { fino: "#1D1F37", hanger: "#FAF8E4", dear: "#F3F2EE", garden: "#0A1628" }[root.dataset.view] || (root.dataset.theme === "night" ? "#4D2940" : "#3E2723"); }
   lampBtn.addEventListener("click", () => {
     const next = root.dataset.theme === "night" ? "day" : "night";
-    const set = () => { root.dataset.theme = next; store.set("jr4-theme", next); swatches(); paintTheme(); };
+    const set = () => { root.dataset.theme = next; store.set("jr4-theme", next); swatches(); paintTheme(); swapSong(); };
     showLabel(null);
     if (!document.startViewTransition || reduce.matches) return set();
     const r = $(".l-head").getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
@@ -459,7 +491,7 @@
     if (reduce.matches || document.hidden) return;
     const base = quick ? 0 : 160, gap = quick ? 18 : 52;
     if (!quick) {
-      $(".hint").animate([{ opacity: 0, transform: "translateY(16px)" }, {}], { duration: 900, delay: 1300, easing: OUT, fill: "backwards" });
+      $(".hint").animate([{ opacity: 0, transform: "translateY(-16px)" }, {}], { duration: 900, delay: 1300, easing: OUT, fill: "backwards" });
       setTimeout(() => { if (view === "desk" && !overlay && !mug.classList.contains("empty")) move(cup, [{ transform: "none" }, { transform: "rotate(-7deg)" }, { transform: "rotate(6deg)" }, { transform: "rotate(-3deg)" }, { transform: "none" }], { duration: 800, easing: "ease-in-out" }); }, 3400);
     }
     ORDER.forEach((el, i) => {
@@ -497,15 +529,15 @@
   };
   const toc = plist.map((p, i) => [i + 2, p.title, p.toc, 2 * i + 2]);
   const fronts = [
-    `<div class="cover-skin" style="position:absolute;inset:0"><div class="cover-frame"><svg class="cover-star"><use href="#star"/></svg><span class="cover-title">My<br>works</span><span class="cover-rule"></span><span class="cover-sub">Jiya Rathod · Vol. 01</span></div></div>`,
-    `<div class="pg"><span class="pg-h">My works</span><div class="toc pg-scroll">${toc.map(([go, a, b, p], i) => `<button data-go="${go}"><i>${String(i + 1).padStart(2, "0")}</i><span><b>${esc(a)}</b><small>${esc(b)}</small></span><em>p. ${p}</em></button>`).join("")}</div>${foot(1, '<span class="pg-l it">turn the page →</span>')}</div>`,
+    `<div class="cover-skin" style="position:absolute;inset:0"><div class="cover-frame"><svg class="cover-star"><use href="#star"/></svg><span class="cover-title">My<br>work</span><span class="cover-rule"></span><span class="cover-sub">Jiya Rathod · Vol. 01</span></div></div>`,
+    `<div class="pg"><span class="pg-h">My work</span><div class="toc pg-scroll">${toc.map(([go, a, b, p], i) => `<button data-go="${go}"><i>${String(i + 1).padStart(2, "0")}</i><span><b>${esc(a)}</b><small>${esc(b)}</small></span><em>p. ${p}</em></button>`).join("")}</div>${foot(1, '<span class="pg-l it">turn the page →</span>')}</div>`,
     ...plist.map(detail),
     `<div class="pg mid"><svg style="width:26px;height:26px;color:#5D0703"><use href="#star"/></svg><span class="pg-h" style="font-style:italic">The end, for now.</span><p>Thanks for reading. Come say hello any time.</p><button class="btn wine" data-copy>Copy my email</button><button class="btn line sm" data-close>Close the book</button></div>`,
   ];
   const backs = [
     `<div class="endpaper"><div class="plate"><span>this book belongs to</span><b>Jiya Rathod</b></div></div>`,
     ...plist.map(plate),
-    `<div class="endpaper"><div class="libcard"><b>My works</b><span class="lc-top"><i>Borrowed by</i><i>When</i></span>${[["me", "too many times"], ["you", "just now"], ["", ""], ["", ""]].map(([a, d]) => `<span><em>${a}</em><em>${d}</em></span>`).join("")}</div></div>`,
+    `<div class="endpaper"><div class="libcard"><b>My work</b><span class="lc-top"><i>Borrowed by</i><i>When</i></span>${[["me", "too many times"], ["you", "just now"], ["", ""], ["", ""]].map(([a, d]) => `<span><em>${a}</em><em>${d}</em></span>`).join("")}</div></div>`,
     `<div style="position:absolute;inset:0;background:#F4C9D6"></div>`,
   ];
   // The hobby book: three cards to a page.
@@ -852,15 +884,16 @@
       : p.coverPhones ? `<div class="cover-art phones"${p.coverBg ? ` style="background:${p.coverBg}"` : ""} data-reveal>${p.coverPhones.map((s) => `<img src="${esc(s.src)}" width="${s.w}" height="${s.h}" alt="${esc(s.t)}">`).join("")}</div>`
       : p.shots.length > 1 ? `<div class="cover-art fino" data-reveal>${p.shots.slice(0, 2).map((s, i) => `<img class="${"ab"[i]}" src="${esc(s.src)}" width="${s.w}" height="${s.h}" alt="${esc(s.alt)}">`).join("")}</div>`
       : "";
+    const endLinks = [[p.live, "Visit the site", "acc"], [p.proto, "Try the prototype", "acc"], [p.code, "Visit the codebase", p.live || p.proto ? "ol" : "acc"]].filter((x) => x[0]).map(([h, n, c]) => `<a class="btn ${c}" href="${esc(h)}" target="_blank" rel="noopener">${esc(n)} ↗</a>`).join("");
     const light = (hex) => { const n = parseInt(hex.slice(1), 16); return ((n >> 16) * 3 + ((n >> 8) & 255) * 6 + (n & 255)) / 10 > 140; };
     const stages = (p.stages || []).map((s) => `<section class="wrap stage-s"><div class="top"><h2 data-reveal>${esc(s.h)}</h2><p class="d" data-reveal>${esc(s.d)}</p></div>${s.board ? `<div class="board-img${s.board.bg ? "" : " bare"}" style="background:${s.board.bg || "none"}" data-reveal><img src="${esc(s.board.src)}" width="${s.board.w}" height="${s.board.h}" alt="${esc(s.board.alt)}" loading="lazy"></div>` : ""}${s.colors ? `<ul class="pal" data-reveal>${s.colors.map(([n, h]) => `<li style="background:${h};color:${light(h) ? "#3D1021" : "#F7F6D7"}"><b>${esc(n)}</b><span>${h}</span></li>`).join("")}</ul>` : ""}${(s.groups || []).map((g) => `${g.t ? `<h3 data-reveal>${esc(g.t)}</h3>` : ""}<div class="phones-row${g.steps ? " steps" : ""}" style="--sz:${g.size}px;--ar:${g.list[0].w}/${g.list[0].h}" data-reveal>${g.list.map((x, i) => `<figure><img src="${esc(x.src)}" width="${x.w}" height="${x.h}" alt="${esc(s.h + ": " + x.t)}" loading="lazy"><figcaption>${g.steps ? `<i>${i + 1}</i>` : ""}${esc(x.t)}</figcaption></figure>`).join("")}${g.wide ? `<figure class="wide"><img src="${esc(g.wide.src)}" width="${g.wide.w}" height="${g.wide.h}" alt="${esc(g.wide.alt)}" loading="lazy"><figcaption>The first outfit builder</figcaption></figure>` : ""}</div>`).join("")}</section>`).join("");
     return `<div class="bar"><div class="wrap"><a href="#book/${p.bookPage}">← Back to the book</a><b>${esc(p.title)}</b><a href="#contact">Say hello</a></div></div><div class="mark" aria-hidden="true"></div>
       <div class="wrap hero"><div class="chips"><span class="chip solid">${esc(p.type)}</span>${p.company ? `<span class="chip">${esc(p.company)}</span>` : ""}</div><h1 tabindex="-1">${esc(p.title)}</h1><p class="line">${esc(p.line)}</p>${p.live || p.proto || p.post || p.code ? `<div class="hero-links">${[[p.live, "Visit " + p.title, "acc"], [p.proto, "Try the prototype", "acc"], [p.post, "Read my LinkedIn post", "ol"], [p.code, "See the code", "ol"]].filter((x) => x[0]).map(([h, n, c]) => `<a class="btn ${c}" href="${esc(h)}" target="_blank" rel="noopener">${esc(n)} ↗</a>`).join("")}</div>` : ""}
         <dl class="meta">${details(p).map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join("")}</dl>${cov}</div>
       ${main}${stages}
-      ${p.gallery.length ? `<section class="gal${p.story ? " on-bg" : ""}"><div class="wrap gal-head"><h2 data-reveal>${esc(p.galTitle)}</h2><div class="gal-btns"><button class="round" data-gal="-1" aria-label="Previous screens">←</button><button class="round solid" data-gal="1" aria-label="More screens">→</button></div></div><div class="strip" tabindex="0" role="region" aria-label="${esc(p.galTitle)}">${p.gallery.map((g) => `<figure style="--fw:${g.fw || Math.min(760, g.w + 32)}px"><div class="shot"><img src="${esc(g.src)}" width="${g.w}" height="${g.h}" alt="${esc(p.title + ": " + g.t)}" loading="lazy"></div><figcaption><b>${esc(g.t)}</b>${esc(g.d)}</figcaption></figure>`).join("")}</div></section>` : ""}
+      ${p.gallery.length ? `<section class="gal${p.story ? " on-bg" : ""}"><div class="wrap gal-head"><h2 data-reveal>${esc(p.galTitle)}</h2><div class="gal-btns"><button class="round" data-gal="-1" aria-label="Previous screens">←</button><button class="round solid" data-gal="1" aria-label="More screens">→</button></div></div><div class="strip" tabindex="0" role="region" aria-label="${esc(p.galTitle)}">${p.gallery.map((g) => `<figure style="--fw:${g.fw || Math.min(760, g.w + 32)}px"><div class="shot"><img src="${esc(g.src)}" width="${g.w}" height="${g.h}" alt="${esc(p.title + ": " + g.t)}" loading="lazy"></div><figcaption><b>${esc(g.t)}</b>${esc(g.d)}</figcaption></figure>`).join("")}</div>${endLinks ? `<div class="wrap"><div class="gal-links" data-reveal><span>See it for yourself.</span>${endLinks}</div></div>` : ""}</section>` : ""}
       <section class="wrap learn${p.learned ? "" : " only"}">${p.learned ? `<p class="sub" data-reveal>What I learned</p><p class="q" data-reveal>${esc(p.learned)}</p>` : ""}<ul class="used" data-reveal><span>Made with</span>${p.tools.map((t) => `<li><b>${esc(t)}</b></li>`).join("")}</ul></section>
-      <div class="wrap case-foot"><div class="hi" data-reveal><span>Want to talk about this one?</span><button class="btn acc" data-copy>Copy my email</button></div><footer><span>© 2026 Jiya Rathod</span><span>Designed and built by me</span><a href="#">Back to the desk</a></footer></div>`;
+      <div class="wrap case-foot">${endLinks && !p.gallery.length ? `<div class="hi see" data-reveal><span>See it for yourself.</span>${endLinks}</div>` : ""}<div class="hi" data-reveal><span>Want to talk about this one?</span><button class="btn ${endLinks ? "ol" : "acc"}" data-copy>Copy my email</button></div><footer><span>© 2026 Jiya Rathod</span><span>Designed and built by Jiya Rathod</span><a href="#">Back to the desk</a></footer></div>`;
   }
   const caseEl = $("#case-view"); let caseIO;
   function mountCase(key) {

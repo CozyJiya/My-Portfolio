@@ -11,7 +11,7 @@
 }
 [data-theme="night"][data-view="desk"] {
   /* dark ink on every light paper */
-  :is(.sheet, .pad, .note-todo, .ls, .flat, .pk, .sticky-green, .contact, .about, .plate, .libcard, .print, .idx, .craft, .sk-cover, #ov-craft .sheet3.hard .sf) { --wine: #701530; --brown: #3a1a2f; --brown-2: #5f2c48; }
+  :is(.sheet, .player, .pad, .note-todo, .ls, .flat, .pk, .sticky-green, .contact, .about, .plate, .libcard, .print, .idx, .craft, .sk-cover, #ov-craft .sheet3.hard .sf) { --wine: #701530; --brown: #3a1a2f; --brown-2: #5f2c48; }
 
   /* ---------- the room ---------- */
   .lamplight { background: radial-gradient(circle at var(--lx, 70%) var(--ly, 12%), rgba(255,178,120,.6), rgba(255,140,100,.28) 24%, rgba(220,118,104,.1) 46%, transparent 64%); }
@@ -90,14 +90,14 @@
   .pin-c, .work { filter: none; }
   .pins > :nth-child(1 of .pin) .pin-c { background: linear-gradient(160deg, var(--poppy), #bd3f45) !important; color: #fff !important; } .pins > :nth-child(2 of .pin) .pin-c { background: #ffe9dc !important; color: var(--deep) !important; } .pins > :nth-child(3 of .pin) .pin-c { background: var(--violet) !important; color: #ffeee2 !important; } .pins > :nth-child(4 of .pin) .pin-c { background: var(--kachi) !important; color: #ffeee2 !important; }
   .pin-c, .work { box-shadow: 0 18px 36px rgba(87,47,72,.34); } .pin-c::before { background: radial-gradient(circle at 34% 30%, #fff0e4, var(--usu) 60%); } .pins > :nth-child(2 of .pin) .pin-c::before { background: radial-gradient(circle at 34% 30%, #e8696b, var(--poppy) 60%); }
-  .work-fino { background: linear-gradient(160deg, #613650, var(--violet)); color: #ffeee2; } .work-solar { background: #ffe9dc; color: var(--deep); }
+  .work-fino { background: linear-gradient(160deg, #613650, var(--violet)); color: #ffeee2; } .work-hanger { background: #ffe9dc; color: var(--deep); } .work-dear { background: linear-gradient(160deg, #c74549, #b93d44); color: #fff; }
 
   /* ---------- drawings ---------- */
   :is(.desk, .works-sec, .overlay) {
     [stroke="#5d0703" i], [stroke="#3e2723" i], [stroke="#282b4a" i] { stroke: #572f48; } [stroke="#c2566f" i], [stroke="#d58fa5" i] { stroke: #cf4a4d; } [stroke="#f4c9d6" i] { stroke: #dc7668; } [stroke="#bad797" i], [stroke="#8a744c" i], [stroke="#5e8a42" i] { stroke: #817965; } [stroke="#fff8e6" i], [stroke="#ffedac" i], [stroke="#e9c98a" i] { stroke: #ffe3d2; } [stroke="#d98e2b" i] { stroke: #cf4a4d; } [stroke="#d9b47c" i] { stroke: #ffc9a9; } [stroke="#8f97d6" i] { stroke: #dc7668; }
     [fill="#5d0703" i] { fill: #572f48; } [fill="#3a0402" i] { fill: #341729; } [fill="#3e2723" i] { fill: #3a1a2f; } [fill="#282b4a" i] { fill: #4e4c5e; } [fill="#c2566f" i] { fill: #cf4a4d; } [fill="#f4c9d6" i] { fill: #ff9f7c; } [fill="#fffdf6" i], [fill="#fff8e6" i], [fill="#fff3dc" i] { fill: #ffeee2; } [fill="#ffedac" i] { fill: #ffa67a; } [fill="#bad797" i] { fill: #817965; } [fill="#8fb56a" i] { fill: #817965; } [fill="#e9a83a" i] { fill: #ffa67a; } [fill="#c97f1e" i] { fill: #cf4a4d; } [fill="#d9b47c" i] { fill: #ffc9a9; } [fill="#b98544" i] { fill: #b9574f; } [fill="#8a4b32" i] { fill: #572f48; } [fill="#e6d6b2" i] { fill: #ffd9c2; } [fill="#dce5f5" i] { fill: #ffe3d2; } [fill="#d9bd70" i] { fill: #dc7668; } [fill="#cfe0dd" i] { fill: #e8b7a6; } [fill="#8fb0b8" i] { fill: #b0627a; } [fill="#c8798f" i] { fill: #b04a4c; }
   }
-  .work-solar, .plate-pg { [fill="#e9a83a" i] { fill: #cf4a4d; } }
+  .plate-pg { [fill="#e9a83a" i] { fill: #cf4a4d; } }
   .jar { [stroke="#5d0703" i] { stroke: #cf4a4d; } [stroke="#282b4a" i] { stroke: #8d86a6; } }
   .biscuit { [fill="#b98544" i] { fill: #b98544; } [stop-color="#d5e8bd" i] { stop-color: #a59c83; } [stop-color="#bad797" i] { stop-color: #817965; } [stop-color="#a5c681" i] { stop-color: #6a6351; } [stop-color="#c6dfa7" i] { stop-color: #958c75; } [stop-color="#a9ca85" i] { stop-color: #706957; } }
   .ear {
